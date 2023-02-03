@@ -38,13 +38,16 @@ void setup() {
 
   // write to registers
   // configure all the registers here: sampling rate, pga, etc.
-  adc1.setRegisterValue(adress, value); 
+  // start with 160sps (assuming 10 packets/s)
+  adc1.setRegisterValue(adress, B00000101); 
 
-  adc1.SendCMD(SELFCAL);
+  adc1.SendCMD(SELFOCAL);
 
 }
 
 void loop() {
+
+  //clock based to run the loop
 
   while(record button is hit)
   {
@@ -52,6 +55,7 @@ void loop() {
     // get conversion
     // delay relative to chosen frequency
     adc1.setRegisterValue(MUX, value);
+    adc1.setRegisterValue(PGA, value);
     PT1 = adc1.GetConversion();
     delay(samplingPeriod);  
   }
