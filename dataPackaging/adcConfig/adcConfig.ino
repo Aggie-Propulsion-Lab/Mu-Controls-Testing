@@ -38,8 +38,11 @@ void setup() {
 
   // write to registers
   // configure all the registers here: sampling rate, pga, etc.
-  // start with 160sps (assuming 10 packets/s)
-  adc1.setRegisterValue(adress, B00000101); 
+  // start with 200sps (assuming 10 packets/s)
+  // STATUS(0x1h) need to be clear once POR (power on reset) occur: .begin and .reset
+  adc1.setRegisterValue(0x01h, B10000000);
+  adc1.setRegisterValue(0x4h, B00011000); 
+  
 
   adc1.SendCMD(SELFOCAL);
 
