@@ -37,9 +37,7 @@ int  CS = 10;
 int  DRDY = 12;
 int _RESET = 8;
 
-unsigned long startTime = 0;
-unsigned long currentTime = 0;
-unsigned long elapsedTime = 1/samplingFreq;
+unsigned long elapsedTime = (1.0/samplingFreq)*10pow(6); //exponential math function
 
 // change the pga values appropriately
 PT_PGA_value = b01010101;
@@ -70,11 +68,11 @@ void setup() {
   // start with 200sps (assuming 10 packets/s)
   // STATUS(0x1h) need to be clear once POR (power on reset) occur: .begin and .reset
   adc1.setRegister(0x01h, B10000000);
-  adc1.setRegister(0x4h, B00011000); 
-  
+  adc1.setRegister(0x4h, B00011000);   
 
   adc1.directCommand(SELFOCAL);
 
+  elapsedMicros adcCycle = 0;
 }
 
 void loop() {
@@ -83,10 +81,9 @@ void loop() {
 
   while(record button is hit)
   {
-    
-    currentTime = millies();
-    while(currentTime-startTime <= elapsedTime)
+    if(adcCycle >= elapsedTime)
     {
+      adcCycle = 0;
       // select mux
       // get conversion
       // delay relative to chosen frequency
@@ -94,9 +91,10 @@ void loop() {
       adc1.setRegisterValue(PGA, value);
       PT1 = adc1.GetConversion();
     }
-    startTime = currentTime;
   }
   
+}
+
 void setRegister(uint_8t address, value)
 {
 
@@ -120,5 +118,4 @@ long getData(uint_8t address)
 void directCommand()
 {
 
-}
 }
