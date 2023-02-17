@@ -4,15 +4,38 @@
 ads1248 adc1;
 
 /*
+Register addresses
+---------------------
+0x00h ID
+0x01h STATUS
+0x02h INPMUX
+0x03h PGA
+0x04h DATARATE
+0x05h REF
+0x06h IDACMAG
+0x07h IDACMUX
+0x08h VBIAS
+0x09h SYS
+0x0Ah OFCAL0
+0x0Bh OFCAL1
+0x0Ch OFCAL2
+0x0Dh FSCAL0
+0x0Eh FSCAL1
+0x0Fh FSCAL2
+0x10h GPIODAT
+0x11h GPIOCON
+*/
+
+/*
   - START: set HIGH
   - RESET: set HIGH
   - CLOK: set LOW
   - Need to select pins on teensy 4.1
  */
-int  START = 0;
-int  CS = 0;
-int  DRDY = 0;
-int _RESET = 0;
+int  START = 9;
+int  CS = 10;
+int  DRDY = 12;
+int _RESET = 8;
 
 unsigned long startTime = 0;
 unsigned long currentTime = 0;
@@ -46,11 +69,11 @@ void setup() {
   // configure all the registers here: sampling rate, pga, etc.
   // start with 200sps (assuming 10 packets/s)
   // STATUS(0x1h) need to be clear once POR (power on reset) occur: .begin and .reset
-  adc1.setRegisterValue(0x01h, B10000000);
-  adc1.setRegisterValue(0x4h, B00011000); 
+  adc1.setRegister(0x01h, B10000000);
+  adc1.setRegister(0x4h, B00011000); 
   
 
-  adc1.SendCMD(SELFOCAL);
+  adc1.directCommand(SELFOCAL);
 
 }
 
@@ -90,6 +113,11 @@ void reset()
 }
 
 long getData(uint_8t address)
+{
+
+}
+
+void directCommand()
 {
 
 }
