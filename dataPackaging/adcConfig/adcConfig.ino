@@ -7,11 +7,12 @@ ads1248 adc1;
   - START: set HIGH
   - RESET: set HIGH
   - CLOK: set LOW
+  - Need to select pins on teensy 4.1
  */
-int  START = 0;
-int  CS = 0;
-int  DRDY = 0;
-int _RESET = 0;
+int  START = 9;
+int  CS = 10;
+int  DRDY = 12; //DOUT
+int _RESET = 8;
 
 unsigned long startTime = 0;
 unsigned long elapsedTime = 0;
