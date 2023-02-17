@@ -9,18 +9,23 @@ ads1248 adc1;
   - CLOK: set LOW
   - Need to select pins on teensy 4.1
  */
-int  START = 9;
-int  CS = 10;
-int  DRDY = 12; //DOUT
-int _RESET = 8;
+int  START = 0;
+int  CS = 0;
+int  DRDY = 0;
+int _RESET = 0;
 
 unsigned long startTime = 0;
-unsigned long elapsedTime = 0;
+unsigned long currentTime = 0;
+unsigned long elapsedTime = 1/samplingFreq;
 
-samplingFreq = 100; 
-samplingPeriod = 1/samplingFreq;
+// change the pga values appropriately
+PT_PGA_value = b01010101;
+LC_PGA_value = b01010101;
 
 PT1 = 0;
+PT2 = 0; 
+PT3 = 0;
+PT4 = 0;
 
 //set up whatever numbers/coefficients needed here for sensors
 
@@ -55,13 +60,37 @@ void loop() {
 
   while(record button is hit)
   {
-    // select mux
-    // get conversion
-    // delay relative to chosen frequency
-    adc1.setRegisterValue(MUX, value);
-    adc1.setRegisterValue(PGA, value);
-    PT1 = adc1.GetConversion();
-    delay(samplingPeriod);  
+    
+    currentTime = millies();
+    while(currentTime-startTime <= elapsedTime)
+    {
+      // select mux
+      // get conversion
+      // delay relative to chosen frequency
+      adc1.setRegisterValue(MUX, value);
+      adc1.setRegisterValue(PGA, value);
+      PT1 = adc1.GetConversion();
+    }
+    startTime = currentTime;
   }
   
+void setRegister(uint_8t address, value)
+{
+
+}
+
+unsigned long getRegister(uint_8t address)
+{
+
+}
+
+void reset()
+{
+
+}
+
+long getData(uint_8t address)
+{
+
+}
 }
