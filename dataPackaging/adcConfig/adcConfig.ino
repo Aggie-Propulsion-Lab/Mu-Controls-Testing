@@ -24,10 +24,27 @@ Register addresses
 #define GPIODAT = 0x10h 
 #define GPIOCON = 0x11h 
 
-int  ADC1 [4] = [10, 12, 8, 9]; //[CS, DRDY, START, RESET]
+/*
+ADC commands
+*/
+#define WREG = b01000000;      // the last 5 bits are reregister address
+#define RREG = b00100000;      // the last 5 bits are reregister address
+#define RDATA = b00010010;     // read data
+#define SFOCAL = b00011001;    // self offset calibration
+#define SYOCAL = b00010110;    // system offset calibration
+#define SYGCAL = b00010111;    // system gain calibration
+#define NOP = b00000000;       // no operation use for dummy byte
+#define WAKEUP = b00000010;    // wake up from pwr down
+#define POWERDOWN = b00000100; // enter powerdown mode
+#define RESET = b00000110;     // reset the device
+#define START = b00001000;     // start conversions
+#define STOP = b00001010;      // stop conversions
 
+int  ADC1 [4] = [10, 12, 8, 9]; //[CS, DRDY, START, RESET]
+int record = 1;
 float samplingFreq = 200; //sampling at 200Hz
 unsigned long elapsedTime = (1.0/samplingFreq)*pow(10,6); //exponential math function
+float clkFrequency;
 
 // change the pga values appropriately
 PT_PGA_value = b01010101;
@@ -47,6 +64,8 @@ void setup() {
     
   }
   Serial.println("Serial online");
+
+  pinMode(record, OUTPUT);
 
   // initialize and calibrate adc
   begin(ADC1);
@@ -69,7 +88,7 @@ void loop() {
 
   //clock based to run the loop
 
-  while(data record pin is high) // toggle switch to start/stop recording data
+  while(digitalRead(record)) // toggle switch to start/stop recording data
   {
     if(adcCycle >= elapsedTime)
     {
@@ -87,7 +106,7 @@ void loop() {
 
 void setRegister(uint_8t adc,uint_8t address, value)
 {
-  while(digitalRead(adc[1])) {}
+  while(digitalRead(adc[1])) {} // check for available data
   SPI.beginTransaction(SPISettings(1920000,MSBFIRST,SPI_MODE1));
   
   digitalWrite(adc[0], LOW); //pull CS low
@@ -104,21 +123,67 @@ void setRegister(uint_8t adc,uint_8t address, value)
 
 unsigned long getRegister(uint_8t adc, uint_8t address)
 {
+  uint_8t data;
+  while(digitalRead(adc[1])) {} // check for available data
+  SPI.beginTransaction(SPISettings(1920000,MSBFIRST,SPI_MODE1));
+  
+  digitalWrite(adc[0], LOW); //pull CS low
+  delayNanoseconds(20);
 
+  SPI.transfer(RREG|address); // first command byte
+  SPI.transfer(b00000000);    // second command byte             
+  delayNanoseconds(20);
+  data = SPI.transfer(NOP);
+  delayNanoseconds(22); //td(SCCS) refer to timing characteristics
+
+  return data;
 }
 
 // send reset command
+// similar with direct command but reset requires specific delay time
 void reset(uint_8t adc)
 {
+  SPI.beginTransaction(SPISettings(1920000,MSBFIRST,SPI_MODE1));
+  
+  digitalWrite(adc[0], LOW); //pull CS low
+  delayNanoseconds(22); //td(CSSC) refer to timing characteristics
+  SPI.transfer(command); // send command
+  delayNanoseconds(100);
+  digitalWrite(adc[0], HIGH); // end the process by pulling CS high
+  delayNanoseconds(22); //td(SCCS) refer to timing characteristics
 
+  SPI.endTransaction();
 }
 
 long getData(uint_8t adc, uint_8t address)
 {
+  uint32_t sensorData = 0;
+  while(digitalRead(adc[1])) {} // check for available data
+  SPI.beginTransaction(SPISettings(1920000,MSBFIRST,SPI_MODE1));
+  digitalWrite(adc[0], LOW); //pull CS low
+  SPI.transfer(RDATA);
+  delayNanoseconds(100); // need to find out how much delay is needed
+  sensorData |= SPI.transfer(NOP);
+  sensorData <<= 8;
+  sensorData |= SPI.transfer(NOP);
+  sensorData <<= 8;
+  sensorData |= SPI.transfer(NOP)
 
+  digitalWrite(adc[0], HIGH); //pull CS high
+  SPI.endTransaction();
 }
 
-void directCommand(uint_8t adc)
+void directCommand(uint_8t adc, uint_8t command)
 {
+  while(digitalRead(adc[1])) {} // check for available data
+  SPI.beginTransaction(SPISettings(1920000,MSBFIRST,SPI_MODE1));
+  
+  digitalWrite(adc[0], LOW); //pull CS low
+  delayNanoseconds(22); //td(CSSC) refer to timing characteristics
+  SPI.transfer(command); // send command
+  delayNanoseconds(22);
+  digitalWrite(adc[0], HIGH); // end the process by pulling CS high
+  delayNanoseconds(22); //td(SCCS) refer to timing characteristics
 
+  SPI.endTransaction();
 }
