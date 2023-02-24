@@ -66,9 +66,9 @@ void setup() {
   Serial.println("Serial online");
 
   pinMode(record, OUTPUT);
+  SPI.begin();
+  SPI.setClockDivider(SPI_CLOCK_DIV4); // fraction of frequency relative to system clock => 600/4 = 150mhz
 
-  // initialize and calibrate adc
-  begin(ADC1);
   reset(ADC1);
   delay(10);
 
@@ -76,8 +76,9 @@ void setup() {
   // configure all the registers here: sampling rate, pga, etc.
   // start with 200sps (assuming 10 packets/s)
   // STATUS(0x1h) need to be clear once POR (power on reset) occur: .begin and .reset
-  setRegister(ADC1, 0x01h, B10000000);
-  setRegister(ADC1, 0x4h, B00011000);   
+  setRegister(ADC1, STATUS, B10000000);
+  setRegister(ADC1, DATARATE, B00011000);
+  setRegister(ADC1, )   
 
   directCommand(ADC1, SELFOCAL);
 
@@ -157,12 +158,12 @@ void reset(uint_8t adc)
 
 long getData(uint_8t adc, uint_8t address)
 {
-  uint32_t sensorData = 0;
+  long sensorData = 0;
   while(digitalRead(adc[1])) {} // check for available data
   SPI.beginTransaction(SPISettings(1920000,MSBFIRST,SPI_MODE1));
   digitalWrite(adc[0], LOW); //pull CS low
   SPI.transfer(RDATA);
-  delayNanoseconds(100); // need to find out how much delay is needed
+  delayMicroseconds(9); // td(RSSC) calculate for 150 mhz
   sensorData |= SPI.transfer(NOP);
   sensorData <<= 8;
   sensorData |= SPI.transfer(NOP);
