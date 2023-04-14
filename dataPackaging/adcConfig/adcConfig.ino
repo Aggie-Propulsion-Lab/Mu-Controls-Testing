@@ -72,14 +72,6 @@ void setup() {
   reset(ADC1);
   delay(10);
 
-  // write to registers
-  // configure all the registers here: sampling rate, pga, etc.
-  // start with 200sps (assuming 10 packets/s)
-  // STATUS(0x1h) need to be clear once POR (power on reset) occur: .begin and .reset
-  setRegister(ADC1, STATUS, B10000000);
-  setRegister(ADC1, DATARATE, B00011000);
-  setRegister(ADC1, )   
-
   directCommand(ADC1, SELFOCAL);
 
   elapsedMicros adcCycle = 0;
@@ -103,6 +95,19 @@ void loop() {
     }
   }
   
+}
+
+void adcInit()
+{
+  // write to registers
+  // configure all the registers here: sampling rate, pga, etc.
+  // start with 200sps (assuming 10 packets/s)
+  // STATUS(0x1h) need to be clear once POR (power on reset) occur: .begin and .reset
+  setRegister(ADC1, STATUS, B10000000);
+  setRegister(ADC1, DATARATE, B00011000);
+  setRegister(ADC1, )   
+
+
 }
 
 void setRegister(uint_8t adc,uint_8t address, value)
