@@ -1,6 +1,10 @@
+#include <SPI.h> // SPI coms
 
 // SPI pins
-int  ADC1 [4] = [10, 12, 8, 9]; //[CS, DRDY, START, RESET]; remember to change value for arduino nano
+int CS1 = 2;
+volatile int DRDY1 = 3;
+int SYNC1 = 4;
+int RESET1 = 5;
 
 //Variables
 double VREF = 2.50; //Value of V_ref. In case of internal V_ref, it is 2.5 V
@@ -16,6 +20,9 @@ uint8_t directCommand; //this is used to store the direct command for sending a 
 String ConversionResults; //Stores the result of the AD conversion
 String PrintMessage; //this is used to concatenate stuff into before printing it out. 
 
+//Actuators
+const int relay = 6;
+
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(115200);  //We will need high datarate, so it should be a high baud rate
@@ -29,20 +36,157 @@ void setup() {
  
 	reset_ADS1256(); //Reset the ADS1256
 	userDefaultRegisters(); //Set up the default registers
-	printInstructions(); //Print the instructions for the commands used in the code
+
+  pinMode(relay,OUTPUT);
+
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
 
+if (Serial.available() > 0) 
+	{
+		char commandCharacter = Serial.read(); //we use characters (letters) for controlling the switch-case	
+    int actuatorCommand = Serial.parseInt();
+    switch (actuatorCommand){
+      case 11:
+            digitalWrite(relay,HIGH);
+            delay(10);
+            break;
+          
+      case 12:
+        digitalWrite(relay,LOW);
+        delay(10);
+        break;
+    }
+      
+		switch (commandCharacter) //based on the command character, we decide what to do
+		{
+
+		case 'r': //this case is used to READ the value of a register
+      //Relevant info on registers: https://youtu.be/wUEx6pEHi2c
+			//Ask the user to pick a register //Register map: Table 23 in the Datasheet
+			Serial.println("*Which register to read?"); //I put the "*" in front of every text message, so my processing software ignores them
+      registerAddress = Serial.parseInt(); //we parse the entered number as an integer and pass it to the registerAddress variable
+			//Wait for the input; Example command: "r 1". This will read the register 1 which is the MUX register (they start at 0!)
+			while (!Serial.available());
+			//Text before the print - string concatenation
+      PrintMessage = "*Value of register " + String(registerAddress) + " is " + String(readRegister(registerAddress));
+			Serial.println(PrintMessage); //printing the confirmation message
+      PrintMessage = ""; //reset the value of the variable     
+			break;
+
+		case 'w': //this case is used to WRITE the value of a register
+			//Ask the user to pick a register
+			Serial.println("*Which Register to write?");
+			//Wait for the input
+			while (!Serial.available());
+			registerAddress = Serial.parseInt(); //Store the register in serialData
+			//Ask for the value we want to write
+			Serial.println("*Which Value to write?");
+			//wait for the input; 
+      //Example command: "w1 1". This will write the value 1 in the MUX register. This will set the AIN0(+) + AIN1(-) as the input.
+			while (!Serial.available());
+			registerValueW = Serial.parseInt();
+
+			//Write the serialData register with the recent input value (Serial.parseInt())
+			writeRegister(registerAddress, registerValueW); //The writeRegister() function expects 2 arguments
+      delay(500); //wait      
+      PrintMessage = "*The value of the register now is: " + String(readRegister(registerAddress));    			
+			Serial.println(PrintMessage); //printing a confirmation message
+			PrintMessage = "";
+			break;
+		
+		case 't': //this case is used to print a message to the serial terminal. Just to test the connection.
+
+			Serial.println("*Test message triggered by serial command");
+			break;
+
+		case 'R': //this does a RESET on the ADS1256
+
+			reset_ADS1256(); //the reset_ADS1256() function resets all the register values
+
+			break;
+
+		case 's': //SDATAC - Stop Read Data Continously
+
+			SPI.transfer(B00001111); //Sending a direct code for SDATAC // Figure 33 in datasheet
+			break;
+
+		case 'C': //Single-ended mode cycling
+   
+			cycleSingleEnded(); //the cycleSingleEnded() function cycles through ALL the 8 single ended channels
+      //single ended channels: A0+COM, A1+COM, A2+COM...A7+COM
+
+			break;
+
+		case 'D': //differential mode cycling			
+
+			cycleDifferential(); //the cycleDifferential() function cycles through ALL the 4 differential channels
+      //differential channels: A0+A1, A2+A3, A4+A5, A6+A7
+			break;
+
+		case 'd': //direct command - See Table 24 in datasheet
+
+			while (!Serial.available());
+
+			directCommand = Serial.parseInt();
+
+			sendDirectCommand(directCommand); //This function sends a standalone command
+
+			Serial.println("*Direct command performed!");
+
+			break;
+
+
+		case 'A': //Single channel continous reading - MUX is manual, can be single and differential too
+
+			readSingleContinuous(B00000001)  ; //the readSingleContinuous() continuously returns a single-ended channel's conversion
+
+			break;
+
+     case 'U'://Set everything back to default
+
+      userDefaultRegisters(); //the userDefaultRegisters() function writes the default values
+      //The default values are determined by the user, therefore it has to be done in this code
+      //This is more like a shortcut for quickly resetting the values to those that you usually use
+      break;
+		}
+	}
 }
 
 // Functions
+unsigned long readRegister(uint8_t registerAddress) //Function for READING a selected register
+{
+  //Relevant video: https://youtu.be/KQ0nWjM-MtI
+  while (digitalRead(DRDY)) {} //we "stuck" here until the DRDY changes its state
+	
+	SPI.beginTransaction(SPISettings(1920000, MSBFIRST, SPI_MODE1));
+	//SPI_MODE1 = output edge: rising, data capture: falling; clock polarity: 0, clock phase: 1.
+
+	//CS must stay LOW during the entire sequence [Ref: P34, T24]
+ 
+	digitalWrite(CS1, LOW); //CS_pin goes LOW
+	
+	SPI.transfer(0x10 | registerAddress); //0x10 = RREG
+
+	SPI.transfer(0x00);
+
+	delayMicroseconds(5); //see t6 in the datasheet
+
+	registerValueR = SPI.transfer(0xFF);	//0xFF is sent to the ADS1256 which returns us the register value
+
+	digitalWrite(CS_pin, HIGH); //CS_pin goes HIGH
+	SPI.endTransaction();
+
+	return registerValueR; //return the registers value
+}
+
 void reset_ADS1256()
 {
 	SPI.beginTransaction(SPISettings(1920000, MSBFIRST, SPI_MODE1)); // initialize SPI with  clock, MSB first, SPI Mode1
 
-	digitalWrite(ADC1[0], LOW); //CS_pin goes LOW
+	digitalWrite(CS1, LOW); //CS_pin goes LOW
 
 	delayMicroseconds(10); //wait
 
@@ -54,7 +198,7 @@ void reset_ADS1256()
 
 	delayMicroseconds(100);
 
-	digitalWrite(ADC1[0], HIGH); //CS_pin goes HIGH
+	digitalWrite(CS1, HIGH); //CS_pin goes HIGH
 
 	SPI.endTransaction();
 
@@ -64,23 +208,23 @@ void initialize_ADS1256()	//starting up the chip by making the necessary steps. 
 {
 	//Setting up the pins first
 	//Chip select
-	pinMode(ADC1[0], OUTPUT); //Chip select is an output
-	digitalWrite(ADC1[0], LOW); //Chip select LOW
+	pinMode(CS1, OUTPUT); //Chip select is an output
+	digitalWrite(CS1, LOW); //Chip select LOW
 
 	SPI.begin(); //start SPI (Arduino/STM32 - ADS1256 communication protocol)
   //The STM32-ADS1256 development board uses a different SPI channel (SPI_2)
   //For more info: https://youtu.be/3Rlr0FCffr0
 
-	CS_Value = ADC1[0]; //We store the value of the CS_pin in a variable
+	CS_Value = CS1; //We store the value of the CS_pin in a variable
 
 	//DRDY
-	pinMode(ADC1[1], INPUT); //DRDY is an input
-	pinMode(ADC[3], OUTPUT); //RESET pin is an output
-	digitalWrite(ADC1[3], LOW); //RESET is set to low 
+	pinMode(DRDY1, INPUT); //DRDY is an input
+	pinMode(RESET1, OUTPUT); //RESET pin is an output
+	digitalWrite(RESET1, LOW); //RESET is set to low 
 
 	delay(500); // Wait
 
-	digitalWrite(ADC1[3], HIGH); //RESET is set to high
+	digitalWrite(RESET1, HIGH); //RESET is set to high
 
 	delay(500); // Wait
 
@@ -99,11 +243,11 @@ void cycleDifferential()
   
   SPI.beginTransaction(SPISettings(1920000, MSBFIRST, SPI_MODE1)); //We start this SPI.beginTransaction once.
   
-  digitalWrite(ADC1[0], LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
+  digitalWrite(CS1, LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
   SPI.transfer(0x50 | 1); // 0x50 = WREG //1 = MUX
   SPI.transfer(0x00); 
   SPI.transfer(B00000001);  //AIN0+AIN1
-  digitalWrite(ADC1[0], HIGH);
+  digitalWrite(CS1, HIGH);
   SPI.endTransaction();
   
 
@@ -121,33 +265,33 @@ void cycleDifferential()
       //Step 1. - Updating MUX 
       
       
-      while (digitalRead(ADC1[1])) {} 
+      while (digitalRead(DRDY1)) {} 
       
       switch (cycle)
       {
       case 1: //Channel 2        
-        digitalWrite(ADC1[0], LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
+        digitalWrite(CS1, LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
         SPI.transfer(0x50 | 1); // 0x50 = WREG //1 = MUX
         SPI.transfer(0x00); 
         SPI.transfer(B00100011);  //AIN2+AIN3
         break;
 
       case 2: //Channel 3        
-        digitalWrite(ADC1[0], LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
+        digitalWrite(CS1, LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
         SPI.transfer(0x50 | 1); // 0x50 = WREG //1 = MUX
         SPI.transfer(0x00); 
         SPI.transfer(B01000101); //AIN4+AIN5
         break;
 
       case 3: //Channel 4
-        digitalWrite(ADC1[0], LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
+        digitalWrite(CS1, LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
         SPI.transfer(0x50 | 1); // 0x50 = WREG //1 = MUX
         SPI.transfer(0x00); 
         SPI.transfer(B01100111); //AIN6+AIN7          
         break;      
 
       case 4: //Channel 1       
-        digitalWrite(ADC1[0], LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
+        digitalWrite(CS1, LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
         SPI.transfer(0x50 | 1); // 0x50 = WREG //1 = MUX
         SPI.transfer(0x00); 
         SPI.transfer(B00000001); //AIN0+AIN1
@@ -182,7 +326,7 @@ void cycleDifferential()
       ConversionResults = ConversionResults + "\t";     
       //---------------------      
       registerData = 0;
-      digitalWrite(ADC1[0], HIGH); //We finished the command sequence, so we switch it back to HIGH                  
+      digitalWrite(CS1, HIGH); //We finished the command sequence, so we switch it back to HIGH                  
 
       //Expected output when using a resistor ladder of 1k resistors and the ~+5V output of the Arduino:
       //Formatting  Channel 1 Channel 2 Channel 3 Channel 4 
@@ -197,6 +341,53 @@ void cycleDifferential()
     ConversionResults = "";
   }
   SPI.endTransaction();
+}
+
+void readSingleContinuous(inputAddy) //Continuously reading 1 single-ended channel (i.e. A0+COM)
+{
+  //Relevant video: https://youtu.be/4-A8aJ5BzIs
+  //Some commands should only be initiated in the beginning of this type of acquisition (RDATAC)
+  //Therefore, we run them outside the while() loop.
+  
+  registerData = 0; // every time we call this function, this should be 0 in the beginning! 
+  
+  writeRegister(0x01, inputAddy); //MUX channel(s)
+	delay(200);
+
+  SPI.beginTransaction(SPISettings(1920000, MSBFIRST, SPI_MODE1));                                   
+	digitalWrite(CS_pin, LOW); //REF: P34: "CS must stay low during the entire command sequence"
+  
+  //Issue RDATAC (0000 0011) command
+  SPI.transfer(B00000011);
+  //Wait t6 time (~6.51 us) REF: P34, FIG:30.
+  delayMicroseconds(5); 
+  
+	while (Serial.read() != 's') //while the reading is not interrupted by a command from the serial terminal
+	{    
+		//Reading a single input continuously using the RDATAC
+		while (digitalRead(DRDY_pin)) {} //Wait for DRDY to go LOW        
+		delayMicroseconds(5); 
+		
+    //step out the data: MSB | mid-byte | LSB,
+    
+		//registerData is ZERO
+    //Previous, we used 0x0F, here we use 0 for the SPI.transfer() argument;
+		registerData |= SPI.transfer(0); //MSB comes in, first 8 bit is updated // '|=' compound bitwise OR operator
+		registerData <<= 8;					//MSB gets shifted LEFT by 8 bits
+		registerData |= SPI.transfer(0); //MSB | Mid-byte
+		registerData <<= 8;					//MSB | Mid-byte gets shifted LEFT by 8 bits
+		registerData |= SPI.transfer(0); //(MSB | Mid-byte) | LSB - final result
+		//After this, DRDY should go HIGH automatically 	    
+   
+    Serial.println(convertToVoltage(registerData)); 
+    //Temporary
+    //convertToVoltage(registerData); //Converted data (units is Volts)
+    
+    registerData = 0; // every time we call this function, this should be 0 in the beginning!      
+	}
+ 
+	digitalWrite(CS_pin, HIGH); //We finished the command sequence, so we switch it back to HIGH
+	SPI.endTransaction();	
 }
 
 void continuousConversion() //Cycling through all (8) single ended channels
@@ -232,62 +423,62 @@ void continuousConversion() //Cycling through all (8) single ended channels
       *///-------------------------------------------------------------------------------------------
       //Steps are on Page21
       //Step 1. - Updating MUX       
-      while (digitalRead(ADC1[1])) {} //waiting for DRDY
+      while (digitalRead(DRDY1)) {} //waiting for DRDY
       
       switch (cycle) 
       {
         //Channels are written manually, so we save time on switching the SPI.beginTransaction on and off.
         case 1: //Channel 2          
-            digitalWrite(ADC1[0], LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
+            digitalWrite(CS1, LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
             SPI.transfer(0x50 | 1); // 0x50 = WREG //1 = MUX
             SPI.transfer(0x00); 
             SPI.transfer(B00011000);  //AIN1+AINCOM           
           break;
 
         case 2: //Channel 3
-            digitalWrite(ADC1[0], LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
+            digitalWrite(CS1, LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
             SPI.transfer(0x50 | 1); // 0x50 = WREG //1 = MUX
             SPI.transfer(0x00); 
             SPI.transfer(B00101000);  //AIN2+AINCOM            
           break;
 
         case 3: //Channel 4
-            digitalWrite(ADC1[0], LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
+            digitalWrite(CS1, LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
             SPI.transfer(0x50 | 1); // 0x50 = WREG //1 = MUX
             SPI.transfer(0x00); 
             SPI.transfer(B00111000);  //AIN3+AINCOM            
           break;
 
         case 4: //Channel 5
-            digitalWrite(ADC1[0], LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
+            digitalWrite(CS1, LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
             SPI.transfer(0x50 | 1); // 0x50 = WREG //1 = MUX
             SPI.transfer(0x00); 
             SPI.transfer(B01001000);  //AIN4+AINCOM 
           break;
 
         case 5: //Channel 6
-            digitalWrite(ADC1[0], LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
+            digitalWrite(CS1, LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
             SPI.transfer(0x50 | 1); // 0x50 = WREG //1 = MUX
             SPI.transfer(0x00); 
             SPI.transfer(B01011000);  //AIN5+AINCOM            
           break;
 
         case 6: //Channel 7
-            digitalWrite(ADC1[0], LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
+            digitalWrite(CS1, LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
             SPI.transfer(0x50 | 1); // 0x50 = WREG //1 = MUX
             SPI.transfer(0x00); 
             SPI.transfer(B01101000);  //AIN6+AINCOM            
           break;
 
         case 7: //Channel 8
-            digitalWrite(ADC1[0], LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
+            digitalWrite(CS1, LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
             SPI.transfer(0x50 | 1); // 0x50 = WREG //1 = MUX
             SPI.transfer(0x00); 
             SPI.transfer(B01111000);  //AIN7+AINCOM            
           break;
 
         case 8: //Channel 1
-            digitalWrite(ADC1[0], LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
+            digitalWrite(CS1, LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
             SPI.transfer(0x50 | 1); // 0x50 = WREG //1 = MUX
             SPI.transfer(0x00); 
             SPI.transfer(B00001000); //AIN0+AINCOM              
@@ -326,7 +517,7 @@ void continuousConversion() //Cycling through all (8) single ended channels
       //---------------------      
       registerData = 0;
 
-      digitalWrite(ADC1[0], HIGH); //We finished the command sequence, so we switch it back to HIGH
+      digitalWrite(CS1, HIGH); //We finished the command sequence, so we switch it back to HIGH
           
       //Expected output when using a resistor ladder of 1k resistors and the ~+5V output of the Arduino:
       //Formatting  Channel 1 Channel 2 Channel 3 Channel 4 Channel 5 Channel 6 Channel 7 Channel 8
@@ -388,8 +579,24 @@ void userDefaultRegisters()
 	delay(200);
 	writeRegister(0x02, B00000000); //ADCON
 	delay(200);
-	writeRegister(0x03, B01100011); //DRATE - DEC[99] - 50 SPS
+	writeRegister(0x03, B10110000); //DRATE - [DEC] = 161 2000-SPS
 	delay(500);
   sendDirectCommand(B11110000);	// SELFCAL
 	Serial.println("*Register defaults updated!");
+}
+
+void convertToVoltage(int32_t registerData)
+{
+  if (long minus = registerData >> 23 == 1) //if the 24th bit (sign) is 1, the number is negative
+    {
+      registerData = registerData - 16777216;  //conversion for the negative sign
+      //"mirroring" around zero
+    }
+
+    voltage = ((2*VREF) / 8388608)*registerData; //2.5 = Vref; 8388608 = 2^{23} - 1
+
+    //Basically, dividing the positive range with the resolution and multiplying with the bits   
+    
+    Serial.println(voltage, 8); //print it on serial, 8 decimals    
+    voltage = 0; //reset voltage
 }
