@@ -15,8 +15,7 @@ void loop() {
   int commandPosition = 0;
   while(Serial.dataAvailable()>0)
   {
-      command[commandPosition] = Serial.read();
-      commandPosition++;
+      
   }
 
   switch (command) {
