@@ -20,6 +20,26 @@ void loop() {
         digtalWrite(relay1, HIGH);
       case "12" // relay 1 off
         digitalWrite(relay1, LOW);
+      case "21"
+        digitalWrite(relay2, HIGH);
+      case "22"
+        digitalWrite(relay2, LOW);
+      case "31"
+        digitalWrite(relay3, HIGH);
+      case "32"
+        digitalWrite(relay3, LOW);
+      case "41"
+        digitalWrite(relay4, HIGH);
+      case "42"
+        digitalWrite(realy4, LOW);
+      case "51"
+        digitalWrite(relay5, HIGH);
+      case "52"
+        digitalWrite(relay5, LOW);
+      case "61"
+        digitalWrite(relay6, HIGH);
+      case "62"
+        digitalWrite(realy6, LOW);
       default:
         break;
     }  
