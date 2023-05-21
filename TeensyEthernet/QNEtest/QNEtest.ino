@@ -27,6 +27,9 @@ const IPAddress dns1 = {1,1,1,1};
 //  Program State
 // --------------------------------------------------------------------------
 
+int actuatorCommand;
+const int relay = 6;
+
 // UDP port.
 EthernetUDP udp;
 
@@ -80,6 +83,8 @@ void setup() {
   // Start UDP listening on the port
   udp.begin(kPort);
 
+  pinMode(relay,OUTPUT);
+  
   printPrompt();
 }
 
@@ -87,6 +92,20 @@ void setup() {
 void loop() {
   receivePacket();
   sendLine();
+  if (Serial.available() > 0) 
+  {  
+    actuatorCommand = Serial.parseInt();
+    switch (actuatorCommand){
+      case 11:
+            digitalWrite(relay,HIGH);
+            delay(10);
+            break;
+          
+      case 12:
+        digitalWrite(relay,LOW);
+        delay(10);
+        break;
+    }
 }
 
 // --------------------------------------------------------------------------

@@ -44,7 +44,7 @@ void setup() {
 void loop() {
   // put your main code here, to run repeatedly:
 
-if (Serial.available() > 0) 
+/*if (Serial.available() > 0) 
 	{
 		char commandCharacter = Serial.read(); //we use characters (letters) for controlling the switch-case	
     int actuatorCommand = Serial.parseInt();
@@ -58,7 +58,7 @@ if (Serial.available() > 0)
         digitalWrite(relay,LOW);
         delay(10);
         break;
-    }
+    }*/
       
 		switch (commandCharacter) //based on the command character, we decide what to do
 		{
