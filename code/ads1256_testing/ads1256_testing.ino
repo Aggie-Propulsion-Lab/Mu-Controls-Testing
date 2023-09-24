@@ -7,8 +7,6 @@ int SYNC1 = 4;
 int RESET1 = 5;
 
 //Variables
-double VREF = 2.50; //Value of V_ref. In case of internal V_ref, it is 2.5 V
-double voltage = 0; //Converted RAW bits. 
 int CS_Value; //we use this to store the value of the bool, since we don't want to directly modify the CS_pin
 
 //Values for registers
@@ -120,12 +118,6 @@ void loop() {
 
 			break;
 
-		case 'D': //differential mode cycling			
-
-			cycleDifferential(); //the cycleDifferential() function cycles through ALL the 4 differential channels
-      //differential channels: A0+A1, A2+A3, A4+A5, A6+A7
-			break;
-
 		case 'd': //direct command - See Table 24 in datasheet
 
 			while (!Serial.available());
@@ -230,119 +222,6 @@ void initialize_ADS1256()	//starting up the chip by making the necessary steps. 
 
 }
 
-void cycleDifferential() 
-{
-  //Relevant viodeo: https://youtu.be/GBWJdyjRIdM
-  
-  int cycle = 1;  
-
-  //outside while() loop, we have to switch to the first differential channel ([AIN0+AIN1]) 
-  //writeRegister(1, 1); //B00000001 = 1;  [AIN0+AIN1]
-  
-  registerData = 0;
-  
-  SPI.beginTransaction(SPISettings(1920000, MSBFIRST, SPI_MODE1)); //We start this SPI.beginTransaction once.
-  
-  digitalWrite(CS1, LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
-  SPI.transfer(0x50 | 1); // 0x50 = WREG //1 = MUX
-  SPI.transfer(0x00); 
-  SPI.transfer(B00000001);  //AIN0+AIN1
-  digitalWrite(CS1, HIGH);
-  SPI.endTransaction();
-  
-
-  while (Serial.read() != 's')
-  {   
-    for (cycle = 1; cycle < 5; cycle++)
-    {
-      //we cycle through all the 4 differential channels with the RDATA
-
-      //RDATA = B00000001
-      //SYNC = B11111100
-      //WAKEUP = B11111111
-
-      //Steps are on Page21
-      //Step 1. - Updating MUX 
-      
-      
-      while (digitalRead(DRDY1)) {} 
-      
-      switch (cycle)
-      {
-      case 1: //Channel 2        
-        digitalWrite(CS1, LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
-        SPI.transfer(0x50 | 1); // 0x50 = WREG //1 = MUX
-        SPI.transfer(0x00); 
-        SPI.transfer(B00100011);  //AIN2+AIN3
-        break;
-
-      case 2: //Channel 3        
-        digitalWrite(CS1, LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
-        SPI.transfer(0x50 | 1); // 0x50 = WREG //1 = MUX
-        SPI.transfer(0x00); 
-        SPI.transfer(B01000101); //AIN4+AIN5
-        break;
-
-      case 3: //Channel 4
-        digitalWrite(CS1, LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
-        SPI.transfer(0x50 | 1); // 0x50 = WREG //1 = MUX
-        SPI.transfer(0x00); 
-        SPI.transfer(B01100111); //AIN6+AIN7          
-        break;      
-
-      case 4: //Channel 1       
-        digitalWrite(CS1, LOW); //CS must stay LOW during the entire sequence [Ref: P34, T24]
-        SPI.transfer(0x50 | 1); // 0x50 = WREG //1 = MUX
-        SPI.transfer(0x00); 
-        SPI.transfer(B00000001); //AIN0+AIN1
-        break;
-      }            
-      
-      SPI.transfer(B11111100); //SYNC      
-
-      delayMicroseconds(4); //t11 delay 24*tau = 3.125 us //delay should be larger, so we delay by 4 us
-
-      SPI.transfer(B11111111); //WAKEUP
-
-      //Step 3. 
-      //Issue RDATA (0000 0001) command      
-      SPI.transfer(B00000001);
-
-      //Wait t6 time (~6.51 us) REF: P34, FIG:30.
-      delayMicroseconds(5);
-
-      //step out the data: MSB | mid-byte | LSB,
-
-      //registerData is ZERO
-      registerData |= SPI.transfer(0x0F); //MSB comes in, first 8 bit is updated // '|=' compound bitwise OR operator
-      registerData <<= 8;         //MSB gets shifted LEFT by 8 bits
-      registerData |= SPI.transfer(0x0F); //MSB | Mid-byte
-      registerData <<= 8;         //MSB | Mid-byte gets shifted LEFT by 8 bits
-      registerData |= SPI.transfer(0x0F); //(MSB | Mid-byte) | LSB - final result
-      //After this, DRDY should go HIGH automatically   
-      
-      //Constructing an output  
-      ConversionResults = ConversionResults + registerData;
-      ConversionResults = ConversionResults + "\t";     
-      //---------------------      
-      registerData = 0;
-      digitalWrite(CS1, HIGH); //We finished the command sequence, so we switch it back to HIGH                  
-
-      //Expected output when using a resistor ladder of 1k resistors and the ~+5V output of the Arduino:
-      //Formatting  Channel 1 Channel 2 Channel 3 Channel 4 
-      /*
-      16:14:23.066 -> 4.79074764  4.16625738  3.55839943  2.96235866  
-      16:14:23.136 -> 4.79277801  4.16681241  3.55990862  2.96264190  
-      16:14:23.238 -> 4.79327344  4.16698741  3.55968427  2.96277694  
-      */
-
-    }
-    Serial.println(ConversionResults);
-    ConversionResults = "";
-  }
-  SPI.endTransaction();
-}
-
 void readSingleContinuous(inputAddy) //Continuously reading 1 single-ended channel (i.e. A0+COM)
 {
   //Relevant video: https://youtu.be/4-A8aJ5BzIs
@@ -378,10 +257,6 @@ void readSingleContinuous(inputAddy) //Continuously reading 1 single-ended chann
 		registerData <<= 8;					//MSB | Mid-byte gets shifted LEFT by 8 bits
 		registerData |= SPI.transfer(0); //(MSB | Mid-byte) | LSB - final result
 		//After this, DRDY should go HIGH automatically 	    
-   
-    Serial.println(convertToVoltage(registerData)); 
-    //Temporary
-    //convertToVoltage(registerData); //Converted data (units is Volts)
     
     registerData = 0; // every time we call this function, this should be 0 in the beginning!      
 	}
@@ -425,6 +300,7 @@ void continuousConversion() //Cycling through all (8) single ended channels
       //Step 1. - Updating MUX       
       while (digitalRead(DRDY1)) {} //waiting for DRDY
       
+      // selecting mux
       switch (cycle) 
       {
         //Channels are written manually, so we save time on switching the SPI.beginTransaction on and off.
@@ -485,7 +361,7 @@ void continuousConversion() //Cycling through all (8) single ended channels
           break;
       }
 
-      //Step 2.     
+      //Step 2: retrieving data    
 
       //Issue RDATA (0000 0001) command
       SPI.transfer(B11111100); //SYNC ~ stop current conversion and restart digital filter
@@ -583,20 +459,4 @@ void userDefaultRegisters()
 	delay(500);
   sendDirectCommand(B11110000);	// SELFCAL
 	Serial.println("*Register defaults updated!");
-}
-
-void convertToVoltage(int32_t registerData)
-{
-  if (long minus = registerData >> 23 == 1) //if the 24th bit (sign) is 1, the number is negative
-    {
-      registerData = registerData - 16777216;  //conversion for the negative sign
-      //"mirroring" around zero
-    }
-
-    voltage = ((2*VREF) / 8388608)*registerData; //2.5 = Vref; 8388608 = 2^{23} - 1
-
-    //Basically, dividing the positive range with the resolution and multiplying with the bits   
-    
-    Serial.println(voltage, 8); //print it on serial, 8 decimals    
-    voltage = 0; //reset voltage
 }
