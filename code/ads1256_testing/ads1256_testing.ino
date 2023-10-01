@@ -156,7 +156,6 @@ void readSingleContinuous()  //Continuously reading 1 single-ended channel (i.e.
     registerData |= SPI.transfer(0);  //(MSB | Mid-byte) | LSB - final result
                                       //After this, DRDY should go HIGH automatically
 
-    //Constructing an output
     Serial.println(registerData);
 
     registerData = 0;  // every time we call this function, this should be 0 in the beginning!
