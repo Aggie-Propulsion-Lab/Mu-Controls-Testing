@@ -1,12 +1,12 @@
 #include <Arduino.h>
 #include <wiring.h>
 
-#define RELAY_1 1
-#define RELAY_2 2
-#define RELAY_3 3
-#define RELAY_4 4
-#define RELAY_5 5
-#define RELAY_6 6
+#define RELAY_1 2
+#define RELAY_2 3
+#define RELAY_3 4
+#define RELAY_4 5
+#define RELAY_5 6
+#define RELAY_6 7
 
 // relay states
 static boolean state1 = 0;
