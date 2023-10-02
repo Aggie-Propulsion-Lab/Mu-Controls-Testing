@@ -2,7 +2,6 @@
 #include <Arduino.h> 
 #include <Streaming.h>
 #include "ads1256.h"
-#include "ads12xx.h"
 #include "adc_functions.h"
 
 #define NOP __ams__("nop\n\t")
